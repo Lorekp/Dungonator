@@ -1,0 +1,46 @@
+.menu-root {
+    position: relative;  /* so children can be absolutely placed within */
+    width: 100%;
+    height: 100%;
+}
+
+/* every panel will fill the root and sit on top of one another */
+.panel {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    /* hidden by default; you’ll make one visible in code */
+    display: none;
+}
+
+/* when you want a panel visible, give it a “visible” class */
+.panel-visible {
+    display: flex;      /* or whatever layout you need inside */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.server-footer {
+    flex-direction: row;      /* side-by-side */
+    justify-content: center;  /* centre the pair (use flex-end for right-align) */
+    margin-top: 12px;
+}
+
+#btnRefresh {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    margin-left: 8px;
+}
+
+#btnMenu {
+    width: 140px;
+    height: 36px;
+    font-size: 16px;
+}
+
+Button {
+    width: 200px;
+    margin-bottom: 10px;
+    font-size: 18px;
+}

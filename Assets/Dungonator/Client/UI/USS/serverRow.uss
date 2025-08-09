@@ -1,0 +1,30 @@
+/* container ----------------------------------------------------------------*/
+.serverRow {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 2px 12px 2px 8px;
+    min-height: 32px;               /* ↑ raise the row so text isn’t clipped   */
+    overflow: visible;
+}
+
+/* columns ------------------------------------------------------------------*/
+.serverName   {
+    width: 40%;
+    white-space: nowrap;
+    overflow: hidden;               /* truncate very long names nicely        */
+    text-overflow: ellipsis;
+}
+
+.playerCount  {
+    width: 80px;                    /* fits “000/000”                         */
+    -unity-text-align: middle-center;
+}
+
+.ping         {
+    width: 72px;                    /* fits “1234 ms”                         */
+    -unity-text-align: middle-right;
+    white-space: nowrap;            /* prevents wrap to next line             */
+    overflow: visible;              /* let the ‘s’ breathe                    */
+}

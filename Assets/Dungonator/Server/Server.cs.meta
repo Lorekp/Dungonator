@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: fc54d7080a3b65346ac283ba016c8eea
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - _addedNetworkObject: {instanceID: 0}
+  - _networkObjectCache: {instanceID: 0}
+  - steamSettings: {fileID: 11400000, guid: 1033b64a965f9da47a22287366cc73af, type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

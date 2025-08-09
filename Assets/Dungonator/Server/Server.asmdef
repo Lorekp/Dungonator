@@ -1,0 +1,29 @@
+{
+    "name": "Server",
+    "rootNamespace": "",
+    "references": [
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:68bd7fdb68ef2684e982e8a9825b18a5",
+        "GUID:a00d5d0ec534800438b52fad095b11fd",
+        "GUID:ab5ef58c342354a44b56a698dc3c6035",
+        "GUID:0da6d172d18a54e4389d0dce1e1ffdf2"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "macOSStandaloneServer",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "ENABLE_PLAYFABSERVER_API"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

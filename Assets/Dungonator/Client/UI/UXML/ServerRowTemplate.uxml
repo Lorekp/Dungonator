@@ -1,0 +1,8 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" editor-extension-mode="False">
+    <Style src="project://database/Assets/Client/UI/USS/serverRow.uss?fileID=7433441132597879392&amp;guid=95bfeaa2fe1637f449576f1b533801cd&amp;type=3#serverRow" />
+    <ui:VisualElement class="serverRow" style="align-items: auto; padding-top: 0; margin-top: -4px;">
+        <ui:Label name="ServerName" text="My Server" class="serverName" style="-unity-text-align: upper-left;" />
+        <ui:Label name="PlayerCount" text="0/0" class="playerCount" />
+        <ui:Label name="PingMs" text="000 ms" class="ping" />
+    </ui:VisualElement>
+</ui:UXML>

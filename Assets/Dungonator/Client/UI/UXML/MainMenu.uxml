@@ -1,0 +1,22 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/Client/UI/USS/MainMenu.uss?fileID=7433441132597879392&amp;guid=7a60fcdb87bb6e54085947d0dc476b62&amp;type=3#MainMenu" />
+    <ui:VisualElement name="root" class="menu-root" style="flex-grow: 1; align-items: center; flex-direction: column; justify-content: center;">
+        <ui:VisualElement name="mainMenuPanel" class="panel" style="flex-grow: 1; display: none; align-items: center; justify-content: center;">
+            <ui:Button text="Play" name="btnPlay" />
+            <ui:Button text="Settings" name="btnSettings" />
+            <ui:Button text="Quit" name="btnQuit" />
+        </ui:VisualElement>
+        <ui:VisualElement name="serverBrowserPanel" class="panel panel-visible" style="flex-grow: 1;">
+            <ui:Label text="Refreshing..." name="lblStatus" />
+            <ui:ListView name="serverList" style="height: 372px; width: 321px; overflow: hidden;" />
+            <ui:VisualElement class="server-footer">
+                <ui:Button text="Back" name="btnMenu" />
+                <ui:Button text="R" name="btnRefresh" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="settingsPanel" class="panel" style="flex-grow: 1;">
+            <ui:VisualElement name="settingsFrame" style="flex-grow: 1; justify-content: center; align-self: auto; top: auto; bottom: auto; width: 50%; height: 70%; max-height: 75%; max-width: 100%;" />
+            <ui:Button text="Back" name="btnMenu" style="display: flex;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
