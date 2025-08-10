@@ -11,17 +11,21 @@ using UnityEngine.Tilemaps;
 namespace Dungonator.Client.Layers.Maze
 {
     /// <summary>
-    /// Attach this class to the player to draw the maze around him.
-    /// Assumes MazeCellTemplate flatLayout is stored with row 0 = bottom.
+    /// Draws the maze around the player.
+    /// Assumptions:
+    ///   • _cells is indexed [row, col] == [y, x], with row 0 at the TOP (north).
+    ///   • Templates store row 0 = bottom (no per-cell Y flip).
+    ///   • 1 world unit == 1 tile.
     /// </summary>
     public class MazeDrawer : MonoBehaviour
     {
-        private MazeFloorData.CellData[,] _cells;
+        private MazeFloorData.CellData[,] _cells;      // [row, col] (row 0 = top)
         private readonly HashSet<Vector2Int> _loadedCellCoords = new();
         private int _cellSize;
         private readonly Dictionary<CellShapes, MazeCellTemplate> _templateMap = new();
 
         private Transform _playerTransform;
+        // stores (col, row)
         private Vector3Int _playerCellPosition;
 
         [SerializeField] private int _renderDistance = 4;
@@ -43,10 +47,8 @@ namespace Dungonator.Client.Layers.Maze
             EnsureTilemapAndGrid();
             AssignTemplatesToMap();
 
-            // Pick any available template to derive cell size
             _cellSize = _templateMap.Values.First().GetCellSize();
 
-            // Pre-size buffers
             var tilesPerCell = _cellSize * _cellSize;
             _posBuf  = new Vector3Int[tilesPerCell];
             _tileBuf = new TileBase[tilesPerCell];
@@ -66,13 +68,12 @@ namespace Dungonator.Client.Layers.Maze
             UpdateMaze(_renderDistance);
         }
 
-        private void UpdateMaze(int distance) // distance in cells
+        private void UpdateMaze(int distance)
         {
-            var cellsToLoad = GetReachableCoords(new Vector2Int(_playerCellPosition.x, _playerCellPosition.y), distance);
-
+            var start = new Vector2Int(_playerCellPosition.x, _playerCellPosition.y); // (col,row)
+            var cellsToLoad   = GetReachableCoords(start, distance);
             var cellsToUnload = _loadedCellCoords.Except(cellsToLoad);
 
-            // Load only new cells; unload cells that dropped out
             LoadCells(cellsToLoad.Except(_loadedCellCoords).ToHashSet());
             UnloadCells(cellsToUnload.ToHashSet());
         }
@@ -80,16 +81,24 @@ namespace Dungonator.Client.Layers.Maze
         private void LoadCells(HashSet<Vector2Int> cellsToLoad)
         {
             var tilesPerCell = _cellSize * _cellSize;
-
             if (_posBuf == null || _posBuf.Length != tilesPerCell)
             {
                 _posBuf  = new Vector3Int[tilesPerCell];
                 _tileBuf = new TileBase[tilesPerCell];
             }
 
+            int rows = _cells.GetLength(0);
+            int cols = _cells.GetLength(1);
+
             foreach (var cellCoord in cellsToLoad)
             {
-                var cell     = _cells[cellCoord.x, cellCoord.y];
+                int col = cellCoord.x; // x
+                int row = cellCoord.y; // y
+
+                if (row < 0 || row >= rows || col < 0 || col >= cols)
+                    continue;
+
+                var cell     = _cells[row, col]; // [row, col]
                 var template = _templateMap[cell.CellShape].flatLayout;
 
                 if (template == null || template.Length != tilesPerCell)
@@ -98,20 +107,20 @@ namespace Dungonator.Client.Layers.Maze
                     continue;
                 }
 
-                // Bottom-left origin for this cell block (world tile coords)
-                var originX = cellCoord.x * _cellSize;
-                var originY = cellCoord.y * _cellSize;
+                // Bottom-left origin of this cell in world-tiles.
+                // row 0 (top) should appear at highest Y -> flip rows here.
+                var originX = col * _cellSize;
+                var originY = (rows - 1 - row) * _cellSize;
 
                 var idx = 0;
                 for (int yLocal = 0; yLocal < _cellSize; yLocal++)
                 for (int xLocal = 0; xLocal < _cellSize; xLocal++)
                 {
-                    // IMPORTANT: no Y inversion; yLocal=0 maps to bottom row
                     _posBuf[idx]  = new Vector3Int(originX + xLocal,
                                                    originY + yLocal,
                                                    0);
 
-                    // flatLayout is row-major with row 0 = bottom
+                    // flatLayout row 0 = bottom (matches yLocal=0 bottom row)
                     _tileBuf[idx] = template[yLocal * _cellSize + xLocal];
                     idx++;
                 }
@@ -125,27 +134,27 @@ namespace Dungonator.Client.Layers.Maze
         private void UnloadCells(HashSet<Vector2Int> cellsToUnload)
         {
             var tilesPerCell = _cellSize * _cellSize;
-
             if (_posBuf == null || _posBuf.Length != tilesPerCell)
                 _posBuf = new Vector3Int[tilesPerCell];
             if (_tileBuf == null || _tileBuf.Length != tilesPerCell)
                 _tileBuf = new TileBase[tilesPerCell];
 
+            Array.Clear(_tileBuf, 0, _tileBuf.Length);
+
+            int rows = _cells.GetLength(0);
+
             foreach (var cellCoord in cellsToUnload)
             {
-                Array.Clear(_tileBuf, 0, tilesPerCell);
+                int col = cellCoord.x;
+                int row = cellCoord.y;
 
-                var originX = cellCoord.x * _cellSize;
-                var originY = cellCoord.y * _cellSize;
+                var originX = col * _cellSize;
+                var originY = (rows - 1 - row) * _cellSize;
 
                 var idx = 0;
                 for (int yLocal = 0; yLocal < _cellSize; yLocal++)
                 for (int xLocal = 0; xLocal < _cellSize; xLocal++)
-                {
-                    _posBuf[idx++] = new Vector3Int(originX + xLocal,
-                                                    originY + yLocal,
-                                                    0);
-                }
+                    _posBuf[idx++] = new Vector3Int(originX + xLocal, originY + yLocal, 0);
 
                 _tilemap.SetTiles(_posBuf, _tileBuf);
             }
@@ -154,18 +163,18 @@ namespace Dungonator.Client.Layers.Maze
         }
 
         /// <summary>
-        /// Returns all grid coordinates reachable from <paramref name="start"/>
-        /// within <paramref name="range"/> steps, following each cell's openings.
+        /// Returns all grid coordinates reachable from start within range steps.
+        /// start = (col,row). Row 0 is TOP. North = row-1, South = row+1.
         /// </summary>
         private HashSet<Vector2Int> GetReachableCoords(Vector2Int start, int range)
         {
             var reachable = new HashSet<Vector2Int>();
             var queue     = new Queue<(Vector2Int pos, int stepsLeft)>();
 
-            var maxX = _cells.GetLength(0);
-            var maxY = _cells.GetLength(1);
+            int rows = _cells.GetLength(0); // y
+            int cols = _cells.GetLength(1); // x
 
-            if (start.x < 0 || start.y < 0 || start.x >= maxX || start.y >= maxY)
+            if (start.x < 0 || start.y < 0 || start.x >= cols || start.y >= rows)
                 return reachable;
 
             reachable.Add(start);
@@ -174,18 +183,19 @@ namespace Dungonator.Client.Layers.Maze
             while (queue.Count > 0)
             {
                 var (pos, steps) = queue.Dequeue();
+                int col = pos.x, row = pos.y;
 
-                if (pos.x < 0 || pos.y < 0 || pos.x >= maxX || pos.y >= maxY)
+                if (col < 0 || row < 0 || col >= cols || row >= rows)
                     continue;
                 if (steps == 0)
                     continue;
 
                 var neighbors = new List<Vector2Int>();
-                AddConnectedNeighbors(pos, _cells[pos.x, pos.y].CellShape, neighbors);
+                AddConnectedNeighbors(col, row, _cells[row, col].CellShape, neighbors);
 
                 foreach (var nbr in neighbors)
                 {
-                    if (nbr.x < 0 || nbr.y < 0 || nbr.x >= maxX || nbr.y >= maxY)
+                    if (nbr.x < 0 || nbr.y < 0 || nbr.x >= cols || nbr.y >= rows)
                         continue;
                     if (!reachable.Add(nbr))
                         continue;
@@ -206,16 +216,13 @@ namespace Dungonator.Client.Layers.Maze
             foreach (var tpl in templates)
             {
                 if (tpl == null) { Debug.LogWarning("Null template in CellTemplates/Layer1"); continue; }
-
                 if (!_templateMap.TryAdd(tpl.shape, tpl))
                     Debug.LogError($"Duplicate template for shape {tpl.shape}");
             }
 
             foreach (CellShapes shape in Enum.GetValues(typeof(CellShapes)))
-            {
                 if (!_templateMap.ContainsKey(shape))
                     Debug.LogError($"Missing MazeCellTemplate for shape {shape}");
-            }
         }
 
         private void EnsureTilemapAndGrid()
@@ -224,7 +231,6 @@ namespace Dungonator.Client.Layers.Maze
 
             var myScene = gameObject.scene;
 
-            // Find Grid in this scene
             _grid = FindObjectsByType<Grid>(FindObjectsSortMode.None)
                     .FirstOrDefault(g => g.gameObject.scene == myScene);
 
@@ -235,7 +241,6 @@ namespace Dungonator.Client.Layers.Maze
                 _grid = go.GetComponent<Grid>();
             }
 
-            // Find or create Tilemap under that Grid
             _tilemap = _grid.GetComponentInChildren<Tilemap>();
             if (_tilemap == null)
             {
@@ -246,112 +251,116 @@ namespace Dungonator.Client.Layers.Maze
         }
 
         /// <summary>
-        /// Updates the cached player cell index. Returns true if it changed.
+        /// Updates cached (col,row). Returns true if changed.
+        /// Row 0 is TOP: row = rows-1 - floor(y / cellSize)
         /// </summary>
         private bool UpdateCurrentCellPos()
         {
-            // Robust math: 1 world unit == 1 tile
-            var p = _playerTransform.position;
-            var cx = Mathf.FloorToInt(p.x / _cellSize);
-            var cy = Mathf.FloorToInt(p.y / _cellSize);
+            int rows = _cells.GetLength(0);
+            int cols = _cells.GetLength(1);
 
-            var current = new Vector3Int(cx, cy, 0);
+            var p  = _playerTransform.position;
+            var col = Mathf.FloorToInt(p.x / _cellSize);
+            var row = rows - 1 - Mathf.FloorToInt(p.y / _cellSize); // flip from world +Y to top-based row
+
+            var current = new Vector3Int(col, row, 0);
             if (current == _playerCellPosition)
                 return false;
 
             _playerCellPosition = current;
 
-            // Optional: safe preview without OOB
-            var maxX = _cells.GetLength(0);
-            var maxY = _cells.GetLength(1);
-            var sx = Mathf.Clamp(cx, 0, maxX - 1);
-            var sy = Mathf.Clamp(cy, 0, maxY - 1);
+            var sx = Mathf.Clamp(col, 0, cols - 1);
+            var sy = Mathf.Clamp(row, 0, rows - 1);
 
-            Debug.LogError($"[MazeDrawer] PlayerCell=({cx},{cy}) shape={_cells[sx, sy].CellShape}");
+            Debug.Log($"[MazeDrawer] PlayerCell (col,row)=({col},{row}) shape={_cells[sy, sx].CellShape}");
             return true;
         }
 
-        private static void AddConnectedNeighbors(Vector2Int cellPos, CellShapes shape, List<Vector2Int> buffer)
+        /// <summary>
+        /// Adds neighbors using (col,row) with row 0 = TOP:
+        /// North = (col, row-1), East = (col+1, row), South = (col, row+1), West = (col-1, row)
+        /// </summary>
+        private static void AddConnectedNeighbors(int col, int row, CellShapes shape, List<Vector2Int> buffer)
         {
             switch (shape)
             {
                 // Straights
                 case CellShapes.VerticalI:
-                    buffer.Add(cellPos + Vector2Int.up);
-                    buffer.Add(cellPos + Vector2Int.down);
+                    buffer.Add(new Vector2Int(col,     row - 1)); // north
+                    buffer.Add(new Vector2Int(col,     row + 1)); // south
                     break;
 
                 case CellShapes.HorizontalI:
-                    buffer.Add(cellPos + Vector2Int.left);
-                    buffer.Add(cellPos + Vector2Int.right);
+                    buffer.Add(new Vector2Int(col - 1, row)); // west
+                    buffer.Add(new Vector2Int(col + 1, row)); // east
                     break;
 
-                // Elbows (L)
+                // Elbows (L): base is Up + Right
                 case CellShapes.L:
-                    buffer.Add(cellPos + Vector2Int.up);
-                    buffer.Add(cellPos + Vector2Int.right);
+                    buffer.Add(new Vector2Int(col,     row - 1)); // up
+                    buffer.Add(new Vector2Int(col + 1, row));     // right
                     break;
 
-                case CellShapes.L90:
-                    buffer.Add(cellPos + Vector2Int.right);
-                    buffer.Add(cellPos + Vector2Int.down);
+                case CellShapes.L90: // Right + Down
+                    buffer.Add(new Vector2Int(col + 1, row));
+                    buffer.Add(new Vector2Int(col,     row + 1));
                     break;
 
-                case CellShapes.L180:
-                    buffer.Add(cellPos + Vector2Int.down);
-                    buffer.Add(cellPos + Vector2Int.left);
+                case CellShapes.L180: // Down + Left
+                    buffer.Add(new Vector2Int(col,     row + 1));
+                    buffer.Add(new Vector2Int(col - 1, row));
                     break;
 
-                case CellShapes.L270:
-                    buffer.Add(cellPos + Vector2Int.left);
-                    buffer.Add(cellPos + Vector2Int.up);
+                case CellShapes.L270: // Left + Up
+                    buffer.Add(new Vector2Int(col - 1, row));
+                    buffer.Add(new Vector2Int(col,     row - 1));
                     break;
 
                 // Cross
                 case CellShapes.X:
-                    buffer.Add(cellPos + Vector2Int.up);
-                    buffer.Add(cellPos + Vector2Int.right);
-                    buffer.Add(cellPos + Vector2Int.down);
-                    buffer.Add(cellPos + Vector2Int.left);
+                    buffer.Add(new Vector2Int(col,     row - 1));
+                    buffer.Add(new Vector2Int(col + 1, row));
+                    buffer.Add(new Vector2Int(col,     row + 1));
+                    buffer.Add(new Vector2Int(col - 1, row));
                     break;
 
-                // T junctions
+                // T junctions (base has wall North → opens Left+Right+Down)
                 case CellShapes.T:
-                    buffer.Add(cellPos + Vector2Int.left);
-                    buffer.Add(cellPos + Vector2Int.right);
-                    buffer.Add(cellPos + Vector2Int.down);
+                    buffer.Add(new Vector2Int(col - 1, row)); // left
+                    buffer.Add(new Vector2Int(col + 1, row)); // right
+                    buffer.Add(new Vector2Int(col,     row + 1)); // down
                     break;
 
-                case CellShapes.T90:
-                    buffer.Add(cellPos + Vector2Int.up);
-                    buffer.Add(cellPos + Vector2Int.left);
-                    buffer.Add(cellPos + Vector2Int.down);
+                case CellShapes.T90: // wall East → Up + Left + Down
+                    buffer.Add(new Vector2Int(col,     row - 1));
+                    buffer.Add(new Vector2Int(col - 1, row));
+                    buffer.Add(new Vector2Int(col,     row + 1));
                     break;
 
-                case CellShapes.T180:
-                    buffer.Add(cellPos + Vector2Int.left);
-                    buffer.Add(cellPos + Vector2Int.right);
-                    buffer.Add(cellPos + Vector2Int.up);
+                case CellShapes.T180: // wall South → Left + Right + Up
+                    buffer.Add(new Vector2Int(col - 1, row));
+                    buffer.Add(new Vector2Int(col + 1, row));
+                    buffer.Add(new Vector2Int(col,     row - 1));
                     break;
 
-                case CellShapes.T270:
-                    buffer.Add(cellPos + Vector2Int.up);
-                    buffer.Add(cellPos + Vector2Int.right);
-                    buffer.Add(cellPos + Vector2Int.down);
+                case CellShapes.T270: // wall West → Up + Right + Down
+                    buffer.Add(new Vector2Int(col,     row - 1));
+                    buffer.Add(new Vector2Int(col + 1, row));
+                    buffer.Add(new Vector2Int(col,     row + 1));
                     break;
 
                 // Dead-ends
                 case CellShapes.DeadEnd:      // open up
-                    buffer.Add(cellPos + Vector2Int.up);
+                    buffer.Add(new Vector2Int(col, row - 1));
                     break;
                 case CellShapes.DeadEnd90:    // open right
-                    buffer.Add(cellPos + Vector2Int.right);
+                    buffer.Add(new Vector2Int(col + 1, row));
                     break;
                 case CellShapes.DeadEnd180:   // open down
-                    buffer.Add(cellPos + Vector2Int.down);
+                    buffer.Add(new Vector2Int(col, row + 1));
                     break;
                 case CellShapes.DeadEnd270:   // open left
-                    buffer.Add(cellPos + Vector2Int.left);
+                    buffer.Add(new Vector2Int(col - 1, row));
                     break;
 
                 // Sealed block
