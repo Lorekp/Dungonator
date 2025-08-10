@@ -23,9 +23,9 @@ namespace Dungonator.Client.Layers.Maze.MazeCellTemplates
         
         public TileBase[,] Get2DLayout()
         {
-            TileBase[,] result = new TileBase[cellSizeXY, cellSizeXY];
-            for (int x = 0; x < cellSizeXY; x++)
-                for (int y = 0; y < cellSizeXY; y++)
+            var result = new TileBase[cellSizeXY, cellSizeXY];
+            for (var x = 0; x < cellSizeXY; x++)
+                for (var y = 0; y < cellSizeXY; y++)
                     result[x, y] = flatLayout[y * cellSizeXY + x]; // row-major order
             return result;
         }

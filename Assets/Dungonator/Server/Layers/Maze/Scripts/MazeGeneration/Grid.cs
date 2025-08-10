@@ -9,12 +9,13 @@ namespace Dungonator.Server.Layers.Maze.Scripts.MazeGeneration
         public int Rows { get; }
         public int Columns { get; }
         private Cell[,] _cells;
-        private readonly Random _rng = new Random();
+        private readonly Random _rng;
 
-        public Grid(int rows, int columns)
+        public Grid(int rows, int columns, Random rng)
         {
             Rows = rows;
             Columns = columns;
+            _rng = rng;
             _cells = new Cell[Rows, Columns];
             PrepareGrid();
             InitializeCellNeighbors();

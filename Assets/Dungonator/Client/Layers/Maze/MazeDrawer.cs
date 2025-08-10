@@ -156,12 +156,21 @@ namespace Dungonator.Client.Layers.Maze
             var reachable = new HashSet<Vector2Int>();
             var queue     = new Queue<(Vector2Int pos, int stepsLeft)>();
 
+            var maxX = _cells.GetLength(0);
+            var maxY = _cells.GetLength(1);
+
+            if (start.x < 0 || start.y < 0 || start.x >= maxX || start.y >= maxY)
+                return reachable;
+            
             reachable.Add(start);
             queue.Enqueue((start, range));
 
             while (queue.Count > 0)
             {
                 var (pos, steps) = queue.Dequeue();
+                
+                if (pos.x < 0 || pos.y < 0 || pos.x >= maxX || pos.y >= maxY)
+                    continue; // outside maze bounds
                 if (steps == 0)
                     continue; // range exhausted
 
@@ -170,6 +179,8 @@ namespace Dungonator.Client.Layers.Maze
 
                 foreach (var nbr in neighbors)
                 {
+                    if (nbr.x < 0 || nbr.y < 0 || nbr.x >= maxX || nbr.y >= maxY)
+                        continue; // skip out-of-bounds neighbors
                     if (!reachable.Add(nbr))  // already visited?
                         continue;
 
@@ -232,7 +243,7 @@ namespace Dungonator.Client.Layers.Maze
             
             
             _playerCellPosition = currentCellPos;
-            Debug.Log($"UpdateCurrentCellPos: {currentCellPos}, PlayerWorldPosition: {_playerTransform.position}, _cellsLength: {_cells.Length}");
+            Debug.LogError($"UpdateCurrentCellPos: {currentCellPos}, CellShape: {_cells[_playerCellPosition.x, _playerCellPosition.y].CellShape}");
             return true;
         }
 
@@ -255,7 +266,7 @@ namespace Dungonator.Client.Layers.Maze
                     break;
 
                 // ───────────── Elbows (L) ─────────────
-                // base L = opens Up + Right
+                // base L = opens to Up + Right
                 case CellShapes.L:
                     buffer.Add(cellPos + Vector2Int.up);
                     buffer.Add(cellPos + Vector2Int.right);
@@ -285,7 +296,7 @@ namespace Dungonator.Client.Layers.Maze
                     break;
 
                 // ───────────── T-junctions ─────────────
-                // base T = Left + Right + Down
+                // base T = opens to Left + Right + Down
                 case CellShapes.T:
                     buffer.Add(cellPos + Vector2Int.left);
                     buffer.Add(cellPos + Vector2Int.right);

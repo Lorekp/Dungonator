@@ -113,16 +113,18 @@ namespace Dungonator.Client.Scripts
                 po.GetOrAddComponent<PlayerInput>().actions = Resources.Load<InputActionAsset>("Input/Player");
 
                 // Camera setup for top-down 2D gameplay
-                var cam = po.GetOrAddComponent<Camera>();
+                var camPivot = new GameObject("CameraPivot");
+                camPivot.transform.SetParent(po.transform, false);
+
+                var cam = camPivot.GetOrAddComponent<Camera>();
                 cam.clearFlags = CameraClearFlags.Skybox;
                 cam.backgroundColor = Color.black;
                 cam.orthographic = true;
-                cam.orthographicSize = 5f; // Zoom level
+                cam.orthographicSize = 15f; // Zoom level
                 cam.nearClipPlane = 0.1f;
                 cam.farClipPlane = 100f;
                 cam.cullingMask = -1; // Show all layers
-                cam.transform.localPosition = new Vector3(0, 10, 0); // Above the player
-                cam.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // Look straight down
+                cam.transform.localPosition = new Vector3(0, 0, -10f); // Above the player
             }
             
             ProcessFloorDataBroadcast(po.scene);
