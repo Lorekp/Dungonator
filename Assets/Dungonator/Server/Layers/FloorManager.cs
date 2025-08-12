@@ -218,7 +218,13 @@ namespace Dungonator.Server.Layers
 
         private void OnFloorSetupEnd(FloorInstance fi)
         {
-            
+            if (fi.Data is MazeFloorData mazeData)
+            {
+                var scene = SceneManager.GetScene(fi.Handle);
+                var parent = new GameObject("MazePhysics");
+                UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(parent, scene);
+                MazePhysicsSetup.BuildServerColliders(mazeData, parent.transform);
+            }
         }
 
         private Vector2[] GetMazeSpawnVectors(MazeGenFloorGenData floorGenData, MazeFloorData.CellData[,] cells)

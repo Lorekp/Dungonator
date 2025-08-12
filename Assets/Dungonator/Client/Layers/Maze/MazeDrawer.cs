@@ -55,6 +55,7 @@ namespace Dungonator.Client.Layers.Maze
 
             UpdateCurrentCellPos();
             UpdateMaze(_renderDistance);
+            ClientMazePhysicsSetup.ConfigureClientColliders(_tilemap);
             _isInitialized = true;
         }
 

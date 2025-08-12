@@ -49,6 +49,7 @@ namespace Editor
             {
                 var shapeProp = serializedObject.FindProperty("shape");
                 var sizeProp  = serializedObject.FindProperty("cellSizeXY");
+                var thicknessProp = serializedObject.FindProperty("wallThickness");
 
                 EditorGUILayout.LabelField("Maze Cell Template", EditorStyles.boldLabel);
                 EditorGUILayout.PropertyField(shapeProp);
@@ -58,6 +59,11 @@ namespace Editor
                     EditorGUILayout.PropertyField(sizeProp, new GUIContent("Cell Size (X=Y)"));
                     if (GUILayout.Button("Resize", GUILayout.Width(70)))
                         ResizeGrid(sizeProp.intValue);
+                }
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.PropertyField(thicknessProp, new GUIContent("Wall Thickness"));
                 }
 
                 using (new EditorGUILayout.HorizontalScope())

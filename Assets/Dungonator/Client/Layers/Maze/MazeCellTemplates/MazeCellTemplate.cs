@@ -10,6 +10,8 @@ namespace Dungonator.Client.Layers.Maze.MazeCellTemplates
     public class MazeCellTemplate : ScriptableObject
     {
         public int cellSizeXY = 10;
+        [Tooltip("How many tiles is the wall composed of? Used in calculating wall-collision.")]
+        public int wallThickness = 3;
         
         public CellShapes shape;
 
