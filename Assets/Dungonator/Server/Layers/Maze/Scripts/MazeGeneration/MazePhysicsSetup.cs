@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Dungonator.Shared.Dungeon;
 using Dungonator.Shared.Dungeon.Layers.Maze;
+using Dungonator.Shared.Helpers;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -39,15 +40,24 @@ namespace Dungonator.Server.Layers.Maze.Scripts.MazeGeneration
             {CellShapes.X, CellWalls.None}
         };
 
-        private const float WallThickness = 0.1f;
-
         public static void BuildServerColliders(MazeFloorData data, Transform parent)
         {
-            if (data.Cells == null) return;
-            var cells = data.Cells;
-            int rows = cells.GetLength(0);
-            int cols = cells.GetLength(1);
-            float size = data.CellSize;
+            if (data.Cells == null)
+                return;
+
+            var rb = parent.gameObject.GetOrAddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Static;
+            rb.simulated = true;
+
+            var cc = parent.gameObject.GetOrAddComponent<CompositeCollider2D>();
+            cc.geometryType   = CompositeCollider2D.GeometryType.Polygons;
+            cc.generationType = CompositeCollider2D.GenerationType.Synchronous;
+
+            var cells     = data.Cells;
+            int rows      = cells.GetLength(0);
+            int cols      = cells.GetLength(1);
+            float size    = data.CellSize;
+            float thickness = data.WallThickness;
 
             // vertical boundaries
             for (int col = 0; col <= cols; col++)
@@ -55,20 +65,29 @@ namespace Dungonator.Server.Layers.Maze.Scripts.MazeGeneration
                 int row = 0;
                 while (row < rows)
                 {
-                    if (!HasVerticalWall(cells, rows, cols, col, row))
+                    int code = GetVerticalWallCode(cells, rows, cols, col, row);
+                    if (code == 0)
                     {
                         row++;
                         continue;
                     }
 
                     int startRow = row;
-                    while (row < rows && HasVerticalWall(cells, rows, cols, col, row))
+                    while (row < rows && GetVerticalWallCode(cells, rows, cols, col, row) == code)
                         row++;
 
-                    float x = col * size;
-                    float yStart = (rows - startRow) * size;
-                    float yEnd = (rows - row) * size;
-                    CreateCollider(parent, new Vector2(x, (yStart + yEnd) * 0.5f), new Vector2(WallThickness, Mathf.Abs(yStart - yEnd)));
+                    float boundaryX = col * size;
+                    float yStart = startRow * size;
+                    float yEnd   = row * size;
+
+                    // VERTICAL stripe at x = boundaryX, spanning yStart..yEnd
+                    float leftExtent  = (code & 1) != 0 ? thickness : 0f; // into left cell (−X)
+                    float rightExtent = (code & 2) != 0 ? thickness : 0f; // into right cell (+X)
+                    float width   = leftExtent + rightExtent;             // t or 2t
+                    float centerX = boundaryX + (rightExtent - leftExtent) * 0.5f;
+                    CreateCollider(parent,
+                        new Vector2(centerX, (yStart + yEnd) * 0.5f),
+                        new Vector2(width, Mathf.Abs(yStart - yEnd)));
                 }
             }
 
@@ -78,51 +97,56 @@ namespace Dungonator.Server.Layers.Maze.Scripts.MazeGeneration
                 int col = 0;
                 while (col < cols)
                 {
-                    if (!HasHorizontalWall(cells, rows, cols, col, row))
+                    int code = GetHorizontalWallCode(cells, rows, cols, col, row);
+                    if (code == 0)
                     {
                         col++;
                         continue;
                     }
 
                     int startCol = col;
-                    while (col < cols && HasHorizontalWall(cells, rows, cols, col, row))
+                    while (col < cols && GetHorizontalWallCode(cells, rows, cols, col, row) == code)
                         col++;
 
-                    float y = (rows - row) * size;
+                    float boundaryY = row * size;
                     float xStart = startCol * size;
-                    float xEnd = col * size;
-                    CreateCollider(parent, new Vector2((xStart + xEnd) * 0.5f, y), new Vector2(Mathf.Abs(xEnd - xStart), WallThickness));
+                    float xEnd   = col * size;
+
+                    
+                    // HORIZONTAL stripe at y = boundaryY, spanning xStart..xEnd
+                    float bottomExtent = (code & 1) != 0 ? thickness : 0f; // into bottom cell (−Y)
+                    float topExtent    = (code & 2) != 0 ? thickness : 0f; // into top cell (+Y)
+                    float height  = bottomExtent + topExtent;
+                    float centerY = boundaryY + (topExtent - bottomExtent) * 0.5f;
+                    CreateCollider(parent,
+                        new Vector2((xStart + xEnd) * 0.5f, centerY),
+                        new Vector2(Mathf.Abs(xEnd - xStart), height));
                 }
             }
         }
 
         private static void CreateCollider(Transform parent, Vector2 center, Vector2 size)
         {
-            var go = new GameObject("MazeWallCollider");
-            go.transform.SetParent(parent, false);
-            var bc = go.AddComponent<BoxCollider2D>();
+            var bc = parent.gameObject.AddComponent<BoxCollider2D>();
+            bc.compositeOperation = Collider2D.CompositeOperation.Merge;
             bc.offset = center;
             bc.size = size;
         }
 
-        private static bool HasVerticalWall(MazeFloorData.CellData[,] cells, int rows, int cols, int col, int row)
+        private static int GetVerticalWallCode(MazeFloorData.CellData[,] cells, int rows, int cols, int col, int row)
         {
-            if (col == 0)
-                return HasWall(cells[row, 0].CellShape, CellWalls.West);
-            if (col == cols)
-                return HasWall(cells[row, cols - 1].CellShape, CellWalls.East);
-            return HasWall(cells[row, col - 1].CellShape, CellWalls.East) ||
-                   HasWall(cells[row, col].CellShape, CellWalls.West);
+            bool fromLeft  = col > 0    && HasWall(cells[row, col - 1].CellShape, CellWalls.East);
+            bool fromRight = col < cols && HasWall(cells[row, col].CellShape,     CellWalls.West);
+            // bit0 = left, bit1 = right
+            return (fromLeft ? 1 : 0) | (fromRight ? 2 : 0);
         }
 
-        private static bool HasHorizontalWall(MazeFloorData.CellData[,] cells, int rows, int cols, int col, int row)
+        private static int GetHorizontalWallCode(MazeFloorData.CellData[,] cells, int rows, int cols, int col, int row)
         {
-            if (row == 0)
-                return HasWall(cells[0, col].CellShape, CellWalls.North);
-            if (row == rows)
-                return HasWall(cells[rows - 1, col].CellShape, CellWalls.South);
-            return HasWall(cells[row - 1, col].CellShape, CellWalls.South) ||
-                   HasWall(cells[row, col].CellShape, CellWalls.North);
+            bool fromBottom = row > 0    && HasWall(cells[row - 1, col].CellShape, CellWalls.North);
+            bool fromTop    = row < rows && HasWall(cells[row, col].CellShape,     CellWalls.South);
+            // bit0 = bottom, bit1 = top
+            return (fromBottom ? 1 : 0) | (fromTop ? 2 : 0);
         }
 
         private static bool HasWall(CellShapes shape, CellWalls wall)

@@ -12,14 +12,12 @@ namespace Dungonator.Client.Layers.Maze
 {
     /// <summary>
     /// Draws the maze around the player.
-    /// Assumptions:
-    ///   • _cells is indexed [row, col] == [y, x], with row 0 at the TOP (north).
-    ///   • Templates store row 0 = bottom (no per-cell Y flip).
-    ///   • 1 world unit == 1 tile.
     /// </summary>
     public class MazeDrawer : MonoBehaviour
     {
         private MazeFloorData.CellData[,] _cells;      // [row, col] (row 0 = top)
+        private int _mazeWallThickness;
+        private int _templateFolderIndex;
         private readonly HashSet<Vector2Int> _loadedCellCoords = new();
         private int _cellSize;
         private readonly Dictionary<CellShapes, MazeCellTemplate> _templateMap = new();
@@ -39,15 +37,17 @@ namespace Dungonator.Client.Layers.Maze
         private Vector3Int[] _posBuf;
         private TileBase[]   _tileBuf;
 
-        public void Init(MazeFloorData.CellData[,] cells)
+        public void Init(MazeFloorData data)
         {
+            Debug.Log($"MazeData: size {data.CellSize} | wall {data.WallThickness} | cells {data.Cells.Length}");
             _playerTransform = transform;
-            _cells = cells;
+            _cells = data.Cells;
 
             EnsureTilemapAndGrid();
             AssignTemplatesToMap();
 
-            _cellSize = _templateMap.Values.First().GetCellSize();
+            _cellSize = data.CellSize;
+            _mazeWallThickness = data.WallThickness;
 
             var tilesPerCell = _cellSize * _cellSize;
             _posBuf  = new Vector3Int[tilesPerCell];
@@ -55,7 +55,6 @@ namespace Dungonator.Client.Layers.Maze
 
             UpdateCurrentCellPos();
             UpdateMaze(_renderDistance);
-            ClientMazePhysicsSetup.ConfigureClientColliders(_tilemap);
             _isInitialized = true;
         }
 
@@ -65,7 +64,8 @@ namespace Dungonator.Client.Layers.Maze
 
             if (!UpdateCurrentCellPos())
                 return;
-
+            
+            Debug.LogError($"Player moved to Cell: {_playerCellPosition}");
             UpdateMaze(_renderDistance);
         }
 
@@ -77,6 +77,9 @@ namespace Dungonator.Client.Layers.Maze
 
             LoadCells(cellsToLoad.Except(_loadedCellCoords).ToHashSet());
             UnloadCells(cellsToUnload.ToHashSet());
+            
+            //rebuild physics stripes for streamed window
+            ClientMazePhysics.RebuildForWindow(_cells, _cellSize, _mazeWallThickness, parent:transform, _loadedCellCoords);
         }
 
         private void LoadCells(HashSet<Vector2Int> cellsToLoad)
@@ -273,7 +276,7 @@ namespace Dungonator.Client.Layers.Maze
             var sx = Mathf.Clamp(col, 0, cols - 1);
             var sy = Mathf.Clamp(row, 0, rows - 1);
 
-            Debug.Log($"[MazeDrawer] PlayerCell (col,row)=({col},{row}) shape={_cells[sy, sx].CellShape}");
+            //Debug.Log($"[MazeDrawer] PlayerCell (col,row)=({col},{row}) shape={_cells[sy, sx].CellShape}");
             return true;
         }
 

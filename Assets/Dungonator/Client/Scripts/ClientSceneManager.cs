@@ -109,7 +109,7 @@ namespace Dungonator.Client.Scripts
                     throw new Exception("Invalid FloorData!");
                 
                 Debug.Log($"[ClientSceneManager] attaching mazedrawer");
-                po.GetOrAddComponent<MazeDrawer>().Init(mazeData.Cells);
+                po.GetOrAddComponent<MazeDrawer>().Init(mazeData);
                 
                 var visuals = po.transform.Find("Visuals");
                 visuals.gameObject.GetOrAddComponent<SpriteRenderer>().sprite = Resources.Load<Sprite>("Player/debugplayer");

@@ -20,5 +20,6 @@ MonoBehaviour:
   bossDensity: 0
   enemyDensity: 0
   cellSize: 10
+  wallThickness: 3
   generateSeed: 0
   seed: 123

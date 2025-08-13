@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Dungonator.Server.Layers.Maze.Floors.FloorData;
+using Dungonator.Server.Layers.Maze.Floors.FloorGenData;
 using Dungonator.Server.Layers.Maze.Scripts.MazeGeneration;
 using Dungonator.Shared.Dungeon;
 using Dungonator.Shared.Helpers;
@@ -95,6 +95,7 @@ namespace Dungonator.Server.Layers
         /// <summary>Call when a client moves to another floor.</summary>
         public void JoinNewFloor(NetworkConnection conn, int newFloor, PlayerData pd)
         {
+            Debug.Log($"{pd.DisplayName} is joining floor {newFloor}");
             if (newFloor == 0) //if joining tutorialFloor
             {
                 QueueTutorial(conn, pd);
@@ -115,7 +116,7 @@ namespace Dungonator.Server.Layers
             {
                 spd.CurrentFloor = newFloor;
                 server._players[conn] = spd;
-            }
+            } //update current floor
             CreateSingleFloor(newFloor, conn);
         }
 
@@ -150,6 +151,7 @@ namespace Dungonator.Server.Layers
                 ? _tutorialInstances.First(x => x.Handle == sceneHandle)
                 : _floors[pd.CurrentFloor];
                 
+            Debug.Log($"{pd.DisplayName} is loaded for scene {sceneHandle}, sending FloorData: {fi.Data.FloorNumber}");
             InstanceFinder.ServerManager.Broadcast(conn, new FloorDataBroadcast { Data = fi.Data, SceneName = fi.SceneName } );
         }
 
@@ -205,15 +207,7 @@ namespace Dungonator.Server.Layers
         private IFloorData GenerateMazeFloorData(int floor)
         {
             var genData = mazeGenFloorData[floor - 1]; //get correct data in array, floor always one higher
-            var generatedCells = _mazeFloorGenerator.GetCellData(genData).Cells;
-            return new MazeFloorData
-            {
-                Cells = generatedCells,
-                FloorNumber = genData.floorNumber,
-                LayerIndex = genData.layerIndex,
-                SpawnPointIndex = 0,
-                SpawnPoints = GetMazeSpawnVectors(genData, generatedCells)
-            };
+            return _mazeFloorGenerator.GenerateFloorData(genData);
         }
 
         private void OnFloorSetupEnd(FloorInstance fi)
@@ -227,34 +221,10 @@ namespace Dungonator.Server.Layers
             }
         }
 
-        private Vector2[] GetMazeSpawnVectors(MazeGenFloorGenData floorGenData, MazeFloorData.CellData[,] cells)
-        {
-            var cellSize = floorGenData.cellSize;
-            var spawns = new List<Vector2>();
-            var origin = new Vector2();
-
-            var rows = cells.GetLength(0);
-            var cols = cells.GetLength(1);
-
-            for (var row = 0; row < rows; ++row)
-            for (var col = 0; col < cols; ++col)
-            {
-                if (!cells[row, col].IsPlayerSpawn)
-                    continue;
-
-                // center of the maze-cell → (row + 0.5, col + 0.5)
-                var x = origin.x + (col + 0.5f) * cellSize;
-                var z = origin.y + (row + 0.5f) * cellSize;
-                
-                spawns.Add(new Vector2(x, z));
-            }
-            
-            return spawns.ToArray();
-        }
-
         private void OnLoadEnd(SceneLoadEndEventArgs args)
         {
             if (!args.QueueData.AsServer) return;
+            Debug.Log("A Scene finished loading!");
             foreach (var scene in args.LoadedScenes) //assigns loaded scenes handle to either floor or tutorial instance list and connects players that are waiting to join
             {
                 if (scene.name == tutorialScene.name)

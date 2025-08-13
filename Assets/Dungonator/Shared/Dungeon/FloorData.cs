@@ -25,6 +25,7 @@ namespace Dungonator.Shared.Dungeon
         public int FloorNumber { get; set; }
         public int SpawnPointIndex { get; set; }
         public int CellSize { get; set; } //size of a cell in unity tilemap tiles
+        public int WallThickness { get; set; } //wall thickness in tiles
         public Vector2[] SpawnPoints { get; set; }
         
         public CellData[,] Cells;
