@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Dungonator.Server.Layers.Maze.Scripts.Enums;
 using Dungonator.Shared.Dungeon.Layers.Maze;
 
 namespace Dungonator.Server.Layers.Maze.Scripts.MazeGeneration

@@ -20,4 +20,12 @@
         DeadEnd270,
         Box
     }
+
+    public enum CellTypes
+    {
+        Empty,
+        Boss,
+        Challenge,
+        PlayerSpawn
+    }
 }
