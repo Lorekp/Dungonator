@@ -20,9 +20,14 @@ namespace Dungonator.Client.Scripts
 {
     public class ClientSceneManager : MonoBehaviour
     {
-        private readonly Dictionary<string, FloorDataBroadcast> _pendingFloorDataBroadcasts = new();
-        private readonly Dictionary<string, bool> _pendingFloorDataBroadcastsReady = new();
-        private readonly Dictionary<string, IFloorData> _loadedScenes = new();
+        // Scenes that are currently loaded on the client.
+        private readonly HashSet<string> _loadedSceneNames = new();
+
+        // Broadcasts we’ve received but not yet processed.
+        private readonly Dictionary<string, FloorDataBroadcast> _pendingDataByScene = new();
+
+        // Data for scenes we’ve already processed (so PlayerSpawn can use it).
+        private readonly Dictionary<string, IFloorData> _readyDataByScene = new();
 
         /* ---------- Unity life-cycle ---------- */
 
@@ -33,7 +38,7 @@ namespace Dungonator.Client.Scripts
             InstanceFinder.SceneManager.OnLoadEnd += OnLoadEnd;
             InstanceFinder.ClientManager.RegisterBroadcast<FloorDataBroadcast>(OnFloorDataBroadcast);
 
-            _loadedScenes.Add("MainMenuScene", null);
+            _loadedSceneNames.Add("MainMenuScene");
             Debug.Log("[ClientSceneManager] Added initial scene MainMenuScene to list");
         }
 
@@ -47,65 +52,73 @@ namespace Dungonator.Client.Scripts
 
         /* ---------- Broadcasts ---------- */
 
-        private void OnFloorDataBroadcast(FloorDataBroadcast floorData, Channel channel)
+        private void OnFloorDataBroadcast(FloorDataBroadcast msg, Channel channel)
         {
-            Debug.Log($"[ClientSceneManager] FloorDataBroadcast received: " +
-                      $"scene='{floorData.SceneName}', channel={channel}");
+            Debug.Log($"[ClientSceneManager] FloorDataBroadcast received: scene='{msg.SceneName}', channel={channel}");
+            _pendingDataByScene.Add(msg.SceneName, msg);
 
-            _pendingFloorDataBroadcasts[floorData.SceneName] = floorData;
+            if (_loadedSceneNames.Contains(msg.SceneName))
+            {
+                var scene = SceneManager.GetSceneByName(msg.SceneName);
+                if (scene.IsValid() && scene.isLoaded)
+                    ProcessFloorDataBroadcast(scene);
+            }
         }
 
         /* ---------- Scene events ---------- */
 
         private void OnLoadEnd(SceneLoadEndEventArgs args)
         {
-            // Which scene that just finished loading matches our pending broadcasts?
-            var match = args.LoadedScenes
-                .FirstOrDefault(s => _pendingFloorDataBroadcasts.ContainsKey(s.name));
-
-            if (match == default)
+            foreach (var scene in args.LoadedScenes)
             {
-                Debug.Log("[ClientSceneManager] OnLoadEnd fired, " +
-                          "but no matching pending broadcast");
-                return;
-            }
+                if (scene.name == "ClientMainScene")
+                    return;
+                
+                _loadedSceneNames.Add(scene.name);
 
-            // Make the new dungeon scene active BEFORE unloading others
-            SceneManager.SetActiveScene(match);
-            _pendingFloorDataBroadcastsReady.Add(match.name, true);
-            InstanceFinder.ClientManager.Broadcast(new ClientFinishedLoadingBroadcast{});
+                if (_pendingDataByScene.ContainsKey(scene.name))
+                    ProcessFloorDataBroadcast(scene);
+                else
+                    Debug.Log($"[ClientSceneManager] Scene '{scene.name}' loaded before data; will process when broadcast arrives.");
+
+                SceneManager.SetActiveScene(scene);
+                InstanceFinder.ClientManager.Broadcast(new ClientFinishedLoadingBroadcast{});
+            }
         }
 
         private void ProcessFloorDataBroadcast(Scene scene)
         {
-            // Pull out and remove the stored data
-            var data = _pendingFloorDataBroadcasts[scene.name].Data;
-            _pendingFloorDataBroadcasts.Remove(scene.name);
-            _pendingFloorDataBroadcastsReady.Remove(scene.name);
-
-            // Build the floor contents
-            LoadFloor(data, scene.name); ;
-
-            // Unload any previous scenes (e.g. MainMenuScene)
-            foreach (var sceneName in _loadedScenes.Keys
-                         .Where(s => s != scene.name)
-                         .ToList())
+            if (!_pendingDataByScene.Remove(scene.name, out var msg))
             {
-                SceneManager.UnloadSceneAsync(sceneName);
-                _loadedScenes.Remove(sceneName);
+                Debug.Log($"[ClientSceneManager] No pending data for scene '{scene.name}' (likely already processed).");
+                return;
             }
 
-            // Track currently-loaded scene
-            _loadedScenes.Add(scene.name, data);
+            var data = msg.Data;
+            _readyDataByScene[scene.name] = data;
+
+            LoadFloor(data, scene.name);
+
+            // Unload everything else
+            var toUnload = _loadedSceneNames.Where(s => s != scene.name).ToList();
+            foreach (var s in toUnload)
+            {
+                Debug.Log($"[ClientSceneManager] Unloading scene '{s}'.");
+                SceneManager.UnloadSceneAsync(s);
+                _readyDataByScene.Remove(s);
+                _loadedSceneNames.Remove(s);
+            }
+
+            Debug.Log($"[ClientSceneManager] Scene '{scene.name}' active with floor data.");
         }
 
         public void OnPlayerSpawn(NetworkBehaviour nb)
         {
             var po = nb.gameObject;
 
-            if (_pendingFloorDataBroadcasts.TryGetValue("Floor-1", out var data)) //if floor 1
+            if (_readyDataByScene.TryGetValue("Floor-1", out var data)) //if floor 1
             {
-                if (!FloorDataHelper.TryGetFloorData(data.Data, out MazeFloorData mazeData))
+                if (!FloorDataHelper.TryGetFloorData(data, out MazeFloorData mazeData))
                     throw new Exception("Invalid FloorData!");
                 
                 Debug.Log($"[ClientSceneManager] attaching mazedrawer");
@@ -116,22 +129,8 @@ namespace Dungonator.Client.Scripts
                 po.GetOrAddComponent<PlayerInput>().actions = Resources.Load<InputActionAsset>("Input/Player");
                 
                 AttachPixelPerfectCamera(po);
-                //Camera setup for top-down 2D gameplay
-                /*var camPivot = new GameObject("CameraPivot");
-                camPivot.transform.SetParent(po.transform, false);
-
-                var cam = camPivot.GetOrAddComponent<Camera>();
-                cam.clearFlags = CameraClearFlags.Skybox;
-                cam.backgroundColor = Color.black;
-                cam.orthographic = true;
-                cam.orthographicSize = 7f; // Zoom level
-                cam.nearClipPlane = 0.1f;
-                cam.farClipPlane = 100f;
-                cam.cullingMask = -1; // Show all layers
-                cam.transform.localPosition = new Vector3(0, 0, -10f); // Above the player*/
             }
-            
-            ProcessFloorDataBroadcast(po.scene);
+
         }
 
         /* ---------- helpers ---------- */

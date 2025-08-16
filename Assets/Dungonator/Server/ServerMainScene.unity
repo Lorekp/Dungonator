@@ -434,7 +434,6 @@ GameObject:
   - component: {fileID: 7443408887818909351}
   - component: {fileID: 7601171}
   - component: {fileID: 935827329}
-  - component: {fileID: 7443408887818909353}
   - component: {fileID: 7601168}
   - component: {fileID: 7601166}
   - component: {fileID: 7443408887818909355}
@@ -465,23 +464,8 @@ MonoBehaviour:
   _dontDestroyOnLoad: 1
   _objectPool: {fileID: 0}
   _persistence: 0
-  _logging: {fileID: 0}
+  _logging: {fileID: 11400000, guid: bdbb96f5fb81408478fb4e115394c072, type: 2}
   _spawnablePrefabs: {fileID: 11400000, guid: 766c699838dc9574ea04581507ae0e55, type: 2}
---- !u!114 &7443408887818909353
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7443408887818909350}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 211a9f6ec51ddc14f908f5acc0cd0423, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _playerPrefab: {fileID: 0}
-  _addToDefaultScene: 1
-  Spawns: []
 --- !u!114 &7443408887818909354
 MonoBehaviour:
   m_ObjectHideFlags: 0

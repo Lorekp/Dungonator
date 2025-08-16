@@ -1,4 +1,5 @@
-﻿using Dungonator.Shared.Dungeon;
+﻿using System;
+using Dungonator.Shared.Dungeon;
 using Dungonator.Shared.Dungeon.Layers.Maze;
 using FishNet.CodeGenerating;
 using FishNet.Serializing;
@@ -14,7 +15,10 @@ namespace Dungonator.Shared.Serializers
             if (floorData is MazeFloorData mazeFloorData)
             {
                 writer.WriteMazeFloorData(mazeFloorData);
+                return;
             }
+            
+            throw new NotImplementedException("Tried to serialize a not implemented FloorDataType");
         }
         
         public static IFloorData ReadIFloorData(this Reader reader)
@@ -23,10 +27,11 @@ namespace Dungonator.Shared.Serializers
 
             if (classType == 1)
             {
+                Debug.Log("Reading MazeFloorData");
                 return reader.ReadMazeFloorData();
             }
-
-            return null;
+            
+            throw new NotImplementedException("Tried to read a not implemented FloorDataType");
         }
         
         public static void WriteMazeFloorData(this Writer writer, Shared.Dungeon.MazeFloorData mazeFloorData)
@@ -35,6 +40,7 @@ namespace Dungonator.Shared.Serializers
             writer.WriteInt32(value: mazeFloorData.LayerIndex);
             writer.WriteInt32(value: mazeFloorData.FloorNumber);
             writer.WriteInt32(value: mazeFloorData.CellSize);
+            writer.WriteInt32(value: mazeFloorData.WallThickness);
             writer.WriteCellData2DArray(mazeFloorData.Cells);
         }
 
@@ -45,6 +51,7 @@ namespace Dungonator.Shared.Serializers
                 LayerIndex = reader.ReadInt32(),
                 FloorNumber = reader.ReadInt32(),
                 CellSize = reader.ReadInt32(),
+                WallThickness = reader.ReadInt32(),
                 Cells = reader.ReadCellData2DArray()
             };
         }

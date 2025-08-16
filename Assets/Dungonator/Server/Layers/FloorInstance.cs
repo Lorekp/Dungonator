@@ -9,9 +9,12 @@ namespace Dungonator.Server.Layers
     {
         public int Handle;
         public string SceneName;
-        public Dictionary<NetworkConnection, bool> Connections; //bool specifies if player has been spawned
+        public HashSet<NetworkConnection> Connections; //bool specifies if player has been spawned
+        public HashSet<NetworkConnection> PendingConnections;
         public bool HasScene;
         public IFloorData Data;
+
+        public bool PhysicsReady;
 
         public bool Equals(FloorInstance other)
         {

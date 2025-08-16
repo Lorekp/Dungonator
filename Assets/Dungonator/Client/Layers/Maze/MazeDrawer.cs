@@ -79,8 +79,10 @@ namespace Dungonator.Client.Layers.Maze
             UnloadCells(cellsToUnload.ToHashSet());
             
             //rebuild physics stripes for streamed window
-            ClientMazePhysics.RebuildForWindow(_cells, _cellSize, _mazeWallThickness, parent:transform, _loadedCellCoords);
-        }
+            var physicsParent = _grid.transform;
+            ClientMazePhysics.RebuildForWindow(
+                _cells, _cellSize, _mazeWallThickness, physicsParent, _loadedCellCoords
+            );}
 
         private void LoadCells(HashSet<Vector2Int> cellsToLoad)
         {

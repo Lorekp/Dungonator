@@ -12,6 +12,7 @@ using FishNet.Managing.Scened;
 using FishNet.Managing.Server;
 using FishNet.Object;
 using FishNet.Transporting;
+using Steamworks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Grid = UnityEngine.Grid;
@@ -60,18 +61,19 @@ namespace Dungonator.Server.Layers
         {
             if (!server._players.TryGetValue(conn, out var pd))
                 return;
-
-            if (_floors.TryGetValue(pd.CurrentFloor, out var fi) && fi.Connections[conn] == false)
+            
+            if (_floors.TryGetValue(pd.CurrentFloor, out var fi))
             {
+                // Physics ready → spawn now
                 SpawnPlayer(conn, fi);
-                fi.Connections[conn] = true;
                 return;
             }
 
-            foreach (var ti in _tutorialInstances.Where(ti => ti.Connections.ContainsKey(conn) && ti.Connections[conn] == false))
+            foreach (var ti in _tutorialInstances)
             {
+                if (ti.Connections.Contains(conn)) continue;
+                
                 SpawnPlayer(conn, ti);
-                ti.Connections[conn] = true; //isSpawned
                 return;
             }
         }
@@ -89,6 +91,9 @@ namespace Dungonator.Server.Layers
             
             var scene = SceneManager.GetScene(fi.Handle);
             
+            
+            fi.PendingConnections.Remove(connection);
+            fi.Connections.Add(connection);
             InstanceFinder.ServerManager.Spawn(pob, connection, scene);
         }
 
@@ -104,7 +109,7 @@ namespace Dungonator.Server.Layers
             
             if (_floors.TryGetValue(newFloor, out var instance)) //already existing instance
             {
-                instance.Connections.Add(conn, false);
+                instance.PendingConnections.Add(conn);
                 InstanceFinder.SceneManager.LoadConnectionScenes(conn, new SceneLoadData(instance.Handle));
                 return;
             }
@@ -141,23 +146,27 @@ namespace Dungonator.Server.Layers
         }
         
         private void LoadForConnection(NetworkConnection conn,
-            int sceneHandle,
-            PlayerData pd)
+            PlayerData pd, FloorInstance fi)
         {
-            var sld = new SceneLoadData(sceneHandle);
+            var sld = new SceneLoadData(fi.Handle);
             InstanceFinder.SceneManager.LoadConnectionScenes(conn, sld);
-                
-            var fi =(pd.CurrentFloor == 0) //get current floorInstance
-                ? _tutorialInstances.First(x => x.Handle == sceneHandle)
-                : _floors[pd.CurrentFloor];
-                
-            Debug.Log($"{pd.DisplayName} is loaded for scene {sceneHandle}, sending FloorData: {fi.Data.FloorNumber}");
-            InstanceFinder.ServerManager.Broadcast(conn, new FloorDataBroadcast { Data = fi.Data, SceneName = fi.SceneName } );
+
+            // don’t send data/spawn until physics is ready
+            if (!fi.PhysicsReady)
+            {
+                fi.PendingConnections.Add(conn);
+                return;
+            }
+
+            Debug.Log($"{pd.DisplayName} is loading floor {pd.CurrentFloor}");
+            // (your existing broadcast/spawn order)
+            InstanceFinder.ServerManager.Broadcast(conn,
+                new FloorDataBroadcast { Data = fi.Data, SceneName = fi.SceneName });
         }
 
         private void CreateTutorialInstance()
         {
-            var newFloorInstance = new FloorInstance { Connections = new Dictionary<NetworkConnection, bool>(), HasScene = false, SceneName = tutorialScene.name}; 
+            var newFloorInstance = new FloorInstance { Connections = new HashSet<NetworkConnection>(), HasScene = false, SceneName = tutorialScene.name}; 
             
             _tutorialInstances.Add(newFloorInstance);
             
@@ -175,14 +184,15 @@ namespace Dungonator.Server.Layers
             {
                 Data = floorData,
                 HasScene    = false,
-                Connections = new Dictionary<NetworkConnection, bool>(),
+                Connections = new HashSet<NetworkConnection>(),
+                PendingConnections = new HashSet<NetworkConnection>(),
                 SceneName = sceneName
             };
 
             _floors[floor] = newInstance;
             
             if (conn != null)
-                newInstance.Connections.Add(conn, false);
+                newInstance.PendingConnections.Add(conn);
 
             var sld = new SceneLoadData(sceneName)
             {
@@ -204,7 +214,7 @@ namespace Dungonator.Server.Layers
             throw new NotSupportedException("Not (yet) supported layer");
         }
 
-        private IFloorData GenerateMazeFloorData(int floor)
+        private MazeFloorData GenerateMazeFloorData(int floor)
         {
             var genData = mazeGenFloorData[floor - 1]; //get correct data in array, floor always one higher
             return _mazeFloorGenerator.GenerateFloorData(genData);
@@ -217,16 +227,37 @@ namespace Dungonator.Server.Layers
                 var scene = SceneManager.GetScene(fi.Handle);
                 var parent = new GameObject("MazePhysics");
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(parent, scene);
-                MazePhysicsSetup.BuildServerColliders(mazeData, parent.transform);
+
+                var handle = MazePhysicsSetup.BuildServerColliders(
+                    mazeData, parent.transform,
+                    new MazePhysicsSetup.BuildOptions { perFrame = 400, generateEvery = 3000 });
+
+                handle.OnCompleted += () =>
+                {
+                    Debug.Log("Finished building maze colliders!");
+                    fi.PhysicsReady = true;
+
+                    // snapshot to avoid modify-while-iterating
+                    var toSpawn = fi.PendingConnections.ToArray();
+                    fi.PendingConnections.Clear();
+
+                    foreach (var conn in toSpawn)
+                    {
+                        if (!server._players.TryGetValue(conn, out var pd))
+                            return;
+                            
+                        LoadForConnection(conn, pd, fi);
+                    }
+                };
             }
         }
 
         private void OnLoadEnd(SceneLoadEndEventArgs args)
         {
             if (!args.QueueData.AsServer) return;
-            Debug.Log("A Scene finished loading!");
             foreach (var scene in args.LoadedScenes) //assigns loaded scenes handle to either floor or tutorial instance list and connects players that are waiting to join
             {
+                Debug.Log("A Scene finished loading!" + scene.name);
                 if (scene.name == tutorialScene.name)
                     HandleLoadedTutorialScene(scene);
                 else
@@ -242,13 +273,18 @@ namespace Dungonator.Server.Layers
             instance.Handle = scene.handle;
             instance.HasScene = true;
 
-            foreach (var t in instance.Connections)
+            if (instance.PhysicsReady)
             {
-                if (!server._players.TryGetValue(t.Key, out var playerData))
-                    return;
-                
-                LoadForConnection(t.Key, instance.Handle, playerData);
-                
+                // take snapshot, clear, then process
+                var toLoad = instance.PendingConnections.ToArray();
+                instance.PendingConnections.Clear();
+
+                foreach (var connection in toLoad)
+                {
+                    if (!server._players.TryGetValue(connection, out var playerData))
+                        continue;
+                    LoadForConnection(connection, playerData, instance);
+                }
             }
             
             _floors[floorNumber] = instance;
@@ -272,8 +308,8 @@ namespace Dungonator.Server.Layers
                     var qp = _tutorialQueue[0];
                     _tutorialQueue.RemoveAt(0);
 
-                    inst.Connections.Add(qp.Connection, false);
-                    LoadForConnection(qp.Connection, inst.Handle, qp.PlayerData);
+                    inst.PendingConnections.Add(qp.Connection);
+                    LoadForConnection(qp.Connection, qp.PlayerData, inst);
                 }
                             
                 _tutorialInstances[i] = inst;

@@ -19,6 +19,7 @@ namespace Dungonator.Shared.Dungeon
         public Vector2[] SpawnPoints { get; set; }
     }
 
+    [UseGlobalCustomSerializer]
     public struct MazeFloorData : IFloorData
     {
         public int LayerIndex { get; set; }
