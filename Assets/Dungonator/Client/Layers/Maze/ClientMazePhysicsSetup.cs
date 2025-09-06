@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Dungonator.Shared.Dungeon.Layers.Maze;
 using UnityEngine;
 
 namespace Dungonator.Client.Layers.Maze
@@ -11,31 +12,6 @@ namespace Dungonator.Client.Layers.Maze
     /// </summary>
     public static class ClientMazePhysics
     {
-        [Flags]
-        private enum CellWalls { None=0, North=1<<0, East=1<<1, South=1<<2, West=1<<3 }
-
-
-        // Matches your server map (walls present on these sides)
-        private static readonly Dictionary<Shared.Dungeon.Layers.Maze.CellShapes, CellWalls> ShapeToWalls = new()
-        {
-            {Shared.Dungeon.Layers.Maze.CellShapes.Box,        CellWalls.North|CellWalls.East|CellWalls.South|CellWalls.West},
-            {Shared.Dungeon.Layers.Maze.CellShapes.DeadEnd,    CellWalls.East|CellWalls.South|CellWalls.West},
-            {Shared.Dungeon.Layers.Maze.CellShapes.DeadEnd90,  CellWalls.North|CellWalls.South|CellWalls.West},
-            {Shared.Dungeon.Layers.Maze.CellShapes.DeadEnd180, CellWalls.North|CellWalls.East|CellWalls.West},
-            {Shared.Dungeon.Layers.Maze.CellShapes.DeadEnd270, CellWalls.North|CellWalls.East|CellWalls.South},
-            {Shared.Dungeon.Layers.Maze.CellShapes.T,          CellWalls.North},
-            {Shared.Dungeon.Layers.Maze.CellShapes.T90,        CellWalls.East},
-            {Shared.Dungeon.Layers.Maze.CellShapes.T180,       CellWalls.South},
-            {Shared.Dungeon.Layers.Maze.CellShapes.T270,       CellWalls.West},
-            {Shared.Dungeon.Layers.Maze.CellShapes.VerticalI,  CellWalls.East|CellWalls.West},
-            {Shared.Dungeon.Layers.Maze.CellShapes.HorizontalI,CellWalls.North|CellWalls.South},
-            {Shared.Dungeon.Layers.Maze.CellShapes.L,          CellWalls.South|CellWalls.West},
-            {Shared.Dungeon.Layers.Maze.CellShapes.L90,        CellWalls.North|CellWalls.West},
-            {Shared.Dungeon.Layers.Maze.CellShapes.L180,       CellWalls.North|CellWalls.East},
-            {Shared.Dungeon.Layers.Maze.CellShapes.L270,       CellWalls.South|CellWalls.East},
-            {Shared.Dungeon.Layers.Maze.CellShapes.X,          CellWalls.None},
-        };
-
         /// <summary>
         /// Rebuild pooled colliders for the streamed window (loadedCells).
         /// 'parent' must be a static/world transform (e.g., Grid.transform).
@@ -50,14 +26,21 @@ namespace Dungonator.Client.Layers.Maze
             if (cells == null || loadedCells == null || loadedCells.Count == 0) return;
             if (cellSize <= 0f || wallThickness <= 0f) return;
 
-            int rows = cells.GetLength(0); // [row, col] with row 0 = TOP
-            int cols = cells.GetLength(1);
+            var rows = cells.GetLength(0); // [row, col] with row 0 = TOP
+            var cols = cells.GetLength(1);
 
             // Static root to host Composite + pooled BoxCollider2D stripes
             var root = GetOrCreateChild(parent, "MazePhysics_Client");
             root.position   = Vector3.zero;
             root.rotation   = Quaternion.identity;
             root.localScale = Vector3.one;
+            
+            // assign physics layer for raycasts
+            var wallLayer = LayerMask.NameToLayer("MazeWalls");
+            if (wallLayer == -1)
+                Debug.LogWarning("Create a Layer named 'MazeWalls' in Project Settings > Tags and Layers.");
+            else
+                root.gameObject.layer = wallLayer;
 
             var host = root.GetComponent<PoolHost>() ?? root.gameObject.AddComponent<PoolHost>();
             host.InitOnce();
@@ -83,24 +66,22 @@ namespace Dungonator.Client.Layers.Maze
             minR = Mathf.Clamp(minR, 0, rows-1);
             maxR = Mathf.Clamp(maxR, 0, rows-1);
 
-            int used = 0;
+            var used = 0;
 
             // Build per-cell stripes fully inside the cell, matching your LoadCells mapping.
             foreach (var cellRC in loadedCells)
             {
-                int col = cellRC.x; // x
-                int row = cellRC.y; // y
+                var col = cellRC.x; // x
+                var row = cellRC.y; // y
                 if (col < minC || col > maxC || row < minR || row > maxR) continue;
                 if (row < 0 || row >= rows || col < 0 || col >= cols) continue;
 
-                var shape = cells[row, col].CellShape;
-                if (!ShapeToWalls.TryGetValue(shape, out var walls) || walls == CellWalls.None)
-                    continue;
-
-                float x0 = col * cellSize;
-                float y0 = (rows - 1 - row) * cellSize; // flip: row 0 (top) maps to highest Y
-                float x1 = x0 + cellSize;
-                float y1 = y0 + cellSize;
+                var walls = MazeWallLookup.Get(cells[row, col].CellShape);
+                
+                var x0 = col * cellSize;
+                var y0 = (rows - 1 - row) * cellSize; // flip: row 0 (top) maps to highest Y
+                var x1 = x0 + cellSize;
+                var y1 = y0 + cellSize;
 
                 var cornerNE = false;
                 var cornerNW = false;
@@ -193,9 +174,6 @@ namespace Dungonator.Client.Layers.Maze
             if (!bc.enabled) bc.enabled = true;
         }
 
-        private static bool HasWall(Shared.Dungeon.Layers.Maze.CellShapes shape, CellWalls wall)
-            => (ShapeToWalls[shape] & wall) != 0;
-
         private static Transform GetOrCreateChild(Transform parent, string name)
         {
             var t = parent.Find(name);
@@ -241,7 +219,7 @@ namespace Dungonator.Client.Layers.Maze
 
             public void DisableFrom(int start)
             {
-                for (int i = start; i < _pool.Count; i++)
+                for (var i = start; i < _pool.Count; i++)
                 {
                     var bc = _pool[i];
                     if (bc.enabled) bc.enabled = false;

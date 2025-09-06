@@ -72,7 +72,7 @@ namespace Dungonator.Client.Scripts
             foreach (var scene in args.LoadedScenes)
             {
                 if (scene.name == "ClientMainScene")
-                    return;
+                    continue;
                 
                 _loadedSceneNames.Add(scene.name);
 
@@ -129,12 +129,47 @@ namespace Dungonator.Client.Scripts
                 po.GetOrAddComponent<PlayerInput>().actions = Resources.Load<InputActionAsset>("Input/Player");
                 
                 AttachPixelPerfectCamera(po);
+                
+                //setup shaders here
             }
 
         }
 
         /* ---------- helpers ---------- */
         
+        private static CompositeCollider2D FindLargestComposite()
+        {
+            CompositeCollider2D best = null;
+            var all = FindObjectsByType<CompositeCollider2D>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var bestArea = 0f;
+            foreach (var c in all)
+            {
+                var b = c.bounds; 
+                var area = b.size.x * b.size.y;
+                if (!(area > bestArea)) continue;
+                bestArea = area; best = c;
+            }
+            return best;
+        }
+
+        private static LayerMask GetMazeWallsMask(CompositeCollider2D composite)
+        {
+            // prefer the actual layer of your maze physics root
+            if (composite)
+            {
+                var layer = composite.gameObject.layer;
+                if (layer >= 0 && layer <= 31)
+                    return 1 << layer;
+            }
+
+            // fallback to a named layer if you use one (configure in Project Settings > Tags and Layers)
+            var namedMask = LayerMask.GetMask("MazeWalls");
+            if (namedMask != 0) return namedMask;
+
+            Debug.LogWarning("[ClientSceneManager] Using Default layer as occluder mask (define a 'MazeWalls' layer or set the composite's layer).");
+            return LayerMask.GetMask("Default");
+        }
+
         void AttachPixelPerfectCamera(GameObject po,
             int assetsPPU = 16,              // pixels-per-unit of your sprites/tiles
             int tilesVisibleY = 10,          // how many tiles tall you want to view
