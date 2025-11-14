@@ -4,15 +4,18 @@ using FishNet.Transporting;
 using GameKit.Dependencies.Utilities;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 
 namespace Dungonator.Shared.Player
 {
     public class PlayerPrediction : NetworkBehaviour
     {
-        [SerializeField] private float _moveForce = 15f;
+        [SerializeField] private float moveForce = 15f;
         private Vector2 _moveInput;
         
         public PredictionRigidbody2D PredictionRigidbody;
+        
+        public static event System.Action<Vector2> OnLocalPlayerMoved;
 
         private void Awake()
         {
@@ -88,10 +91,10 @@ namespace Dungonator.Shared.Player
              * indicates. At the end of this guide a more advanced use of state will
              * be demonstrated. */
     
-            //Be sure to always apply and set velocties using PredictionRigidbody
+            //Be sure to always apply and set velocities using PredictionRigidbody
             //and never on the rigidbody itself; this includes if also accessing from
             //another script.
-            var forces = new Vector2(data.Horizontal, data.Vertical) * _moveForce;
+            var forces = new Vector2(data.Horizontal, data.Vertical) * moveForce;
             
             PredictionRigidbody.AddForce(forces); 
 
@@ -100,6 +103,11 @@ namespace Dungonator.Shared.Player
             //Simulate is ultimately telling the PredictionRigidbody to iterate
             //the forces we added above.
             PredictionRigidbody.Simulate();
+
+            if (IsOwner)
+            {
+                OnLocalPlayerMoved?.Invoke(transform.position);
+            }
         }
 
         [Reconcile]
@@ -144,4 +152,5 @@ namespace Dungonator.Shared.Player
         public uint GetTick() => _tick;
         public void SetTick(uint value) => _tick = value;
     }
+    
 }

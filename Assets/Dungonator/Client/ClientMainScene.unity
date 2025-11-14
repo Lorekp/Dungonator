@@ -352,7 +352,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b6a7a3947bed1bb4e9ac8b3d73984b80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  toggleKey: 284
+  toggleActionRef: {fileID: 0}
+  defaultToggleBinding: <Keyboard>/f3
+  extraToggleBinding: 
   updatesPerSecond: 4
   smoothing: 0.1
   showMilliseconds: 1

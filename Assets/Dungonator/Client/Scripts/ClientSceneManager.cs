@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Dungonator.Client.Layers.Maze;
+using Dungonator.Client.Shaders.FogOfWar;
 using Dungonator.Shared.Dungeon;
 using Dungonator.Shared.Helpers;
 using FishNet;
@@ -29,6 +30,7 @@ namespace Dungonator.Client.Scripts
         // Data for scenes we’ve already processed (so PlayerSpawn can use it).
         private readonly Dictionary<string, IFloorData> _readyDataByScene = new();
 
+        private FogOfWarManager _fogManager;
         /* ---------- Unity life-cycle ---------- */
 
         private void OnEnable()
@@ -130,12 +132,19 @@ namespace Dungonator.Client.Scripts
                 
                 AttachPixelPerfectCamera(po);
                 
-                //setup shaders here
+                //
+                _fogManager = po.GetOrAddComponent<FogOfWarManager>();
+                SetupFogOfWar(mazeData);
             }
 
         }
 
         /* ---------- helpers ---------- */
+
+        private void SetupFogOfWar(MazeFloorData mazeData)
+        {
+            _fogManager.InitializeFog(new Vector2Int(mazeData.Cells.GetLength(0), mazeData.Cells.GetLength(1)), mazeData.CellSize);
+        }
         
         private static CompositeCollider2D FindLargestComposite()
         {
