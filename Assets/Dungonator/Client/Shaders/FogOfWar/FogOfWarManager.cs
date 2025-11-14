@@ -11,24 +11,18 @@ namespace Dungonator.Client.Shaders.FogOfWar
 
         [Header("Fog Settings")]
         [SerializeField] private Material fogMaterial;
-        [SerializeField] private int textureResolution;
+        [SerializeField] private int textureResolution = 2048;
 
         [Header("Exploration Settings")]
-        [SerializeField] private float exploredBrightness;
-        [SerializeField] private float visionRange;
+        [SerializeField] private float exploredBrightness = 0.3f;
+        [SerializeField] private float visionRange = 10f;
         [SerializeField] private float softEdgeSize = 2f;
         
-        private Texture2D fogTexture;
+        private Texture2D _fogTexture;
         private Color[] fogPixels;
         private Vector2 worldSize;
-
-        public FogOfWarManager(int textureResolution = 2048, float exploredBrightness = 0.3f, float visionRange = 10f)
-        {
-            this.textureResolution = textureResolution;
-            this.exploredBrightness = exploredBrightness;
-            this.visionRange = visionRange;
-            this.fogMaterial = Resources.Load<Material>("Shaders/FogOfWarMaterial");
-        }
+        
+        private bool initialized = false;
         
         private void OnEnable()
         {
@@ -42,9 +36,11 @@ namespace Dungonator.Client.Shaders.FogOfWar
 
         public void InitializeFog(Vector2Int gridSize, float cellSize)
         {
+            this.fogMaterial = Resources.Load<Material>("Shaders/FogOfWarMaterial");
+            
             worldSize = new Vector2(gridSize.x * cellSize, gridSize.y * cellSize);
 
-            fogTexture = new Texture2D(textureResolution, textureResolution)
+            _fogTexture = new Texture2D(textureResolution, textureResolution)
             {
                 filterMode = FilterMode.Bilinear,
                 wrapMode = TextureWrapMode.Clamp
@@ -56,21 +52,24 @@ namespace Dungonator.Client.Shaders.FogOfWar
                 fogPixels[i] = Color.black;
             }
             
-            fogTexture.SetPixels(fogPixels);
-            fogTexture.Apply();
+            _fogTexture.SetPixels(fogPixels);
+            _fogTexture.Apply();
 
-            fogMaterial.SetTexture(FogTexture, fogTexture);
+            fogMaterial.SetTexture(FogTexture, _fogTexture);
             fogMaterial.SetVector(WorldSize, new Vector4(worldSize.x, worldSize.y, 0, 0));
 
             Debug.Log($"Fog initialized: World size = {worldSize}, Texture = {textureResolution}x{textureResolution}");
+            
+            initialized = true;
         }
 
         private void OnLocalPlayerMoved(Vector2 pos)
         {
+            if (!initialized) return;
             UpdateVisibility(pos);
             Debug.Log($"Fog updated at world pos: {pos}");
         }
-
+        
         private void UpdateVisibility(Vector2 playerWorldPos)
         {
             // Step 1: Fade visible to explored
@@ -85,8 +84,8 @@ namespace Dungonator.Client.Shaders.FogOfWar
             // Step 2: Draw new visibility with soft edges
             DrawSoftCircleInFog(playerWorldPos, visionRange);
             
-            fogTexture.SetPixels(fogPixels);
-            fogTexture.Apply();
+            _fogTexture.SetPixels(fogPixels);
+            _fogTexture.Apply();
         }
 
         private void DrawSoftCircleInFog(Vector2 worldPos, float radius)
@@ -138,6 +137,13 @@ namespace Dungonator.Client.Shaders.FogOfWar
                         fogPixels[index] = new Color(visibility, visibility, visibility, 1f);
                     }
                 }
+            }
+        }
+        private void OnDestroy()
+        {
+            if (_fogTexture != null)
+            {
+                Destroy(_fogTexture);
             }
         }
     }
