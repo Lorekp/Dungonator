@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using PlayFab.ClientModels;
+using PlayFab.ServerModels;
 
 namespace Dungonator.Server
 {
@@ -9,9 +9,9 @@ namespace Dungonator.Server
     {
         public string PlayFabId;
         public string SteamID;
-        
+
         public string DisplayName;
-        
+
         public int    CurrentFloor;
 
         public static PlayerData From(Dictionary<string, UserDataRecord> src, string playFabId)
@@ -42,7 +42,7 @@ namespace Dungonator.Server
                 DisplayName = displayName,
                 CurrentFloor = 0
             };
-            return p; 
+            return p;
         }
     }
 }

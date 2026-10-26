@@ -1,6 +1,5 @@
 ﻿using System;
 using Dungonator.Shared.Authentication;
-using Heathen.SteamworksIntegration.API;
 using PlayFab;
 using PlayFab.ClientModels;
 using Steamworks;
@@ -11,9 +10,9 @@ namespace Dungonator.Client.Scripts
     public interface IClientAuthProvider
     {
         AuthProvider Kind { get; }
-        void GetCredential(Action<AuthCredentialBroadcast> ready);   
+        void GetCredential(Action<AuthCredentialBroadcast> ready);
     }
-    
+
     /// <summary>
     /// Returns the first credential-provider that makes sense for *this* build
     /// and *this* runtime environment.
@@ -30,8 +29,8 @@ namespace Dungonator.Client.Scripts
             /* ───── Desktop / Steam ─────────────────────────────── */
             try
             {
-                if (App.Initialized) 
-                    return new SteamAuth(); 
+                if (Client.SteamInitialized)
+                    return new SteamAuth();
             }
             catch (DllNotFoundException)
             {
@@ -39,7 +38,7 @@ namespace Dungonator.Client.Scripts
             }
 #endif
 
-#if UNITY_GAMECORE    
+#if UNITY_GAMECORE
             /* Xbox Series S|X / One (GDK) */
             return new XboxAuth();               // TODO: implement when needed
 #endif
@@ -71,7 +70,7 @@ namespace Dungonator.Client.Scripts
             {
                 string hex = BitConverter.ToString(cb.m_rgubTicket, 0, cb.m_cubTicket)
                     .Replace("-", "").ToLowerInvariant();
-                
+
                 PlayFabClientAPI.LoginWithSteam(
                     new LoginWithSteamRequest
                     {
@@ -92,7 +91,7 @@ namespace Dungonator.Client.Scripts
                     },
                     err => Debug.LogError(err.GenerateErrorReport()));
             });
-            
+
             SteamUser.GetAuthTicketForWebApi("AzurePlayFab");
         }
     }

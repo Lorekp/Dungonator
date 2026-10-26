@@ -189,7 +189,6 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 786385663}
   _networkObjectCache: {fileID: 0}
   titleId: 1BBC8F
-  secretKey:
   floorManager: {fileID: 786385666}
   port: 7777
 --- !u!114 &7601171

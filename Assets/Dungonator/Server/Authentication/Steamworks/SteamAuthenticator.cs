@@ -21,7 +21,7 @@ namespace Dungonator.Server.Authentication.Steamworks
             base.InitializeOnce(nm);
             _nm = nm;
             Instance = this;
-            
+
             // client: when transport is “Started”, we grab a ticket & send it
             nm.ClientManager.OnClientConnectionState += OnClientConnectionState;
 
@@ -39,41 +39,59 @@ namespace Dungonator.Server.Authentication.Steamworks
             RequestSteamTicket();
         }
 
+        private HAuthTicket _ticket = HAuthTicket.Invalid;
+        private Callback<GetAuthSessionTicketResponse_t> _ticketResponse;
+
         private void RequestSteamTicket()
         {
-            // TODO: replace with actual host SteamID (from server)
-            CSteamID hostId = SteamUser.GetSteamID();
-
-            Heathen.SteamworksIntegration.API.Authentication.GetAuthSessionTicket(hostId, (resp, ioError) =>
+            if (_transport == null)
+                _transport = GetComponent<SteamAuthTransport>();
+            if (_transport == null)
             {
-                if (ioError || (resp.Result != EResult.k_EResultOK))
+                _nm.ClientManager.StopConnection();
+                return;
+            }
+
+            var bytes = new byte[1024];
+            uint length = 0;
+            var identity = new SteamNetworkingIdentity();
+            identity.SetSteamID(SteamUser.GetSteamID()); // Legacy self-host prototype; configure the actual host for deployment.
+            _ticketResponse?.Dispose();
+            _ticketResponse = Callback<GetAuthSessionTicketResponse_t>.Create(response =>
+            {
+                if (response.m_hAuthTicket != _ticket) return;
+                if (response.m_eResult != EResult.k_EResultOK)
                 {
-                    //TODO: display error to client
                     _nm.ClientManager.StopConnection();
                     return;
                 }
-
-                byte[] ticket = resp.Data;
-                // ─── write steamId + ticket into a writer ───
-                var w = WriterPool.Retrieve(sizeof(ulong) + ticket.Length);
-                w.WriteUInt64(SteamUser.GetSteamID().m_SteamID);
-                w.WriteUInt8Array(ticket, 0, ticket.Length);
-
-                // ─── send via a ServerRpc ───
-                _transport.SubmitTicketServerRpc(w.GetArraySegment());
-                WriterPool.Store(w);
+                var writer = WriterPool.Retrieve(sizeof(ulong) + (int)length);
+                writer.WriteUInt64(SteamUser.GetSteamID().m_SteamID);
+                writer.WriteUInt8Array(bytes, 0, (int)length);
+                _transport.SubmitTicketServerRpc(writer.GetArraySegment());
+                WriterPool.Store(writer);
             });
+            _ticket = SteamUser.GetAuthSessionTicket(bytes, bytes.Length, out length, ref identity);
+        }
+
+        private void OnDestroy()
+        {
+            _ticketResponse?.Dispose();
+            if (_ticket != HAuthTicket.Invalid) SteamUser.CancelAuthTicket(_ticket);
+            if (_nm == null) return;
+            _nm.ClientManager.OnClientConnectionState -= OnClientConnectionState;
+            _nm.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
         }
 
         public void HandleTicket(NetworkConnection conn, ArraySegment<byte> payload)
         {
             if (conn == null)
                 return; //TODO: send error?
-            
+
             // read steamId + ticket
             var r = ReaderPool.Retrieve(payload, _nm, Reader.DataSource.Server);
             ulong steamId = r.ReadUInt64();
-            
+
             byte[] ticket = new byte[r.Remaining];
             r.ReadUInt8Array(ref ticket, ticket.Length);
             ReaderPool.Store(r);
@@ -97,7 +115,7 @@ namespace Dungonator.Server.Authentication.Steamworks
                 //     batch = 0
                 // };
             }
-            
+
             OnAuthenticationResult?.Invoke(conn, ok);
         }
 

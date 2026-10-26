@@ -2,8 +2,6 @@
 
 using System.Collections.Generic;
 using FishNet;
-using Heathen.SteamworksIntegration;
-using Heathen.SteamworksIntegration.API;
 using Steamworks;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -14,13 +12,13 @@ namespace Dungonator.Client.UI.Scripts
     {
         private bool _isRefreshing;
         private Label _lblStatus;
-        private readonly List<GameServerBrowserEntry> _serverItems = new();
-        
+        private readonly List<gameserveritem_t> _serverItems = new();
+
         /* ---------- UI ---------- */
         [Header("UI")]
         [SerializeField] private UIDocument uiDocument;
         [SerializeField] private VisualTreeAsset rowTemplate;
-        
+
         private Button _btnRefresh;
 
         private ListView _serverListView;
@@ -33,7 +31,7 @@ namespace Dungonator.Client.UI.Scripts
 
         public void Init()
         {
-            _appId = App.Id;
+            _appId = SteamUtils.GetAppID();
 
             var root = uiDocument.rootVisualElement;
             _serverListView = root.Q<ListView>("serverList");
@@ -44,10 +42,10 @@ namespace Dungonator.Client.UI.Scripts
             _serverListView.bindItem   = BindServerRow;
             _serverListView.itemsSource = _serverItems;
             _serverListView.selectionType = SelectionType.Single;
-            
+
             _btnRefresh.clicked += RefreshServerList;
             _serverListView.itemsChosen += OnItemsChosen;
-            
+
             RefreshServerList();
         }
 
@@ -55,7 +53,7 @@ namespace Dungonator.Client.UI.Scripts
         {
             foreach (var obj in chosen)          // ListView can return several, but we allow only one
             {
-                if (obj is GameServerBrowserEntry entry)
+                if (obj is gameserveritem_t entry)
                 {
                     JoinServer(entry);
                     break;
@@ -63,7 +61,7 @@ namespace Dungonator.Client.UI.Scripts
             }
         }
 
-        private void JoinServer(GameServerBrowserEntry entry)
+        private void JoinServer(gameserveritem_t entry)
         {
             var nm        = InstanceFinder.NetworkManager;
             var transport = nm.TransportManager.GetTransport<FishySteamworks.FishySteamworks>();
@@ -90,12 +88,12 @@ namespace Dungonator.Client.UI.Scripts
 
             Debug.Log($"[JoinServer] Connecting to {ip}:{port} …");
             nm.ClientManager.StartConnection();
-            
+
             /*var nm = InstanceFinder.NetworkManager;
-            
+
             // 1. Grab the server’s SteamID that came back in the query results
             string hostSteamId = entry.m_steamID.m_SteamID.ToString();
-            
+
             // 2. Connect
             nm.ClientManager.StartConnection(hostSteamId);       */ // TODO: test on 2 machines
         }
@@ -104,11 +102,11 @@ namespace Dungonator.Client.UI.Scripts
         {
             if (_isRefreshing)
                 return;
-            
+
             _isRefreshing = true;
             _btnRefresh.SetEnabled(false);
             _serverListView.SetEnabled(false);
-            
+
             _serverItems.Clear();
             _serverListView.RefreshItems();
             _lblStatus.text = "Refreshing...";
@@ -136,9 +134,9 @@ namespace Dungonator.Client.UI.Scripts
                 OnServerFailedToRespond,
                 OnRefreshComplete);
 
-            //_listHandle = Matchmaking.Client.RequestInternetServerList( TODO: LAN/Internet button? 
+            //_listHandle = SteamMatchmakingServers.RequestInternetServerList( TODO: LAN/Internet button?
             //                    _appId, _filters, _responseLinker);
-            _listHandle = Matchmaking.Client.RequestLANServerList(
+            _listHandle = SteamMatchmakingServers.RequestLANServerList(
                                 _appId, _responseLinker);
 
             Debug.Log($"[Browser] Query started for AppID {_appId} (handle {_listHandle}).");
@@ -175,7 +173,7 @@ namespace Dungonator.Client.UI.Scripts
                 var details = SteamMatchmakingServers.GetServerDetails(req, i);
                 if (details.m_steamID.m_SteamID != 0 && details.m_nAppID == _appId.m_AppId)
                 {
-                    _serverItems.Add(new GameServerBrowserEntry(details));
+                    _serverItems.Add(details);
 
                     // Extra verbose line per server
                     Debug.Log($"[Browser]   ✔ {details.GetServerName()}  {details.m_nPlayers}/{details.m_nMaxPlayers}  {details.m_nPing} ms");
@@ -188,7 +186,7 @@ namespace Dungonator.Client.UI.Scripts
             _lblStatus.text = $"{_serverItems.Count} server(s) found";
             _btnRefresh.SetEnabled(true);
             _serverListView.SetEnabled(true);
-            
+
             if (req != HServerListRequest.Invalid)
                 SteamMatchmakingServers.ReleaseRequest(req);
         }

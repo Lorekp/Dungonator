@@ -13,11 +13,11 @@ namespace Dungonator.Server
     public class Server : NetworkBehaviour
     {
         [SerializeField] private string titleId        = "1BBC8F";
-        [SerializeField] private string secretKey      = "";
+
         [SerializeField] private FloorManager floorManager;
 
         public Dictionary<NetworkConnection, PlayerData> _players =  new();
-        
+
         [SerializeField]
         private ushort port = 7777;            // Change if you modified Tugboat.
 
@@ -33,20 +33,20 @@ namespace Dungonator.Server
             InstanceFinder.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
             InstanceFinder.ServerManager.OnAuthenticationResult -= OnAuthenticationResult;
         }
-        
+
         private void Awake()
         {
             PlayFabSettings.staticSettings.TitleId            = titleId;
-            PlayFabSettings.staticSettings.DeveloperSecretKey = secretKey;
+            PlayFabSettings.staticSettings.DeveloperSecretKey = System.Environment.GetEnvironmentVariable("DUNGONATOR_PLAYFAB_SECRET");
 
             if (string.IsNullOrEmpty(PlayFabSettings.staticSettings.DeveloperSecretKey))
                 Debug.LogError("DeveloperSecretKey is missing! PlayFab Server calls will fail.");
-            
+
             var tug = InstanceFinder.TransportManager.Transport;
             tug.SetPort(port);
-            
+
             InstanceFinder.ServerManager.StartConnection();
-            
+
             var address = InstanceFinder.TransportManager.Transport.GetPort();
             Debug.Log($"<color=cyan>[SERVER]</color> Listening on UDP 0.0.0.0:{address.ToString()}");
         }
@@ -56,16 +56,16 @@ namespace Dungonator.Server
             if (success)
             {
                 Debug.Log($"[{conn.ClientId}] joined with {_players[conn].DisplayName}");
-                
+
                 if (_players.TryGetValue(conn, out var pd)) //join floor player left on/ tutorial
                     floorManager.JoinNewFloor(conn, pd.CurrentFloor, pd);
-                
+
                 return;
             }
-            
+
             conn.Disconnect(false);
         }
-        
+
         private void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
         {
             if (args.ConnectionState == RemoteConnectionState.Started)
@@ -75,13 +75,13 @@ namespace Dungonator.Server
                 if (_players.TryGetValue(conn, out var pd))
                     SavePlayerData(pd);
                 _players.Remove(conn);
-                
+
                 floorManager.RemovePlayer(conn, pd);
-                
+
                 Debug.LogWarning($"[SERVER] Client {conn.ClientId} disconnected.");
             }
         }
-        
+
         private static void SavePlayerData(PlayerData pd)
         {
             var kvp = new Dictionary<string, string>
@@ -89,7 +89,7 @@ namespace Dungonator.Server
                 { "DisplayName",  pd.DisplayName },
                 { "SteamID",    pd.SteamID },
                 { "CurrentFloor", pd.CurrentFloor.ToString() },
-                
+
                 // any other fields in PlayerData
             };
 
@@ -107,7 +107,7 @@ namespace Dungonator.Server
                     /* optional retry / queue for later */
                 });
         }
-        
+
         public void RegisterPlayer(NetworkConnection conn, PlayerData pd) =>
             _players[conn] = pd;
 
